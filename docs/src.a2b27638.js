@@ -24855,6 +24855,10 @@ function edt1d(f, d, v, z, n) {
     }
 }
 
+},{}],"src/shaders/vertex.glsl":[function(require,module,exports) {
+module.exports = "precision mediump float;\n#define GLSLIFY 1\n\nattribute vec2 position;\nattribute vec2 texturePosition;\n\nuniform mat3 transform;\nuniform mat3 projection;\n\nuniform vec2 u_textureSize;\n\nvarying vec2 v_texcoord;\n\nvoid main () {\n  v_texcoord = texturePosition / u_textureSize;\n  vec3 final = projection * transform * vec3(position, 1);\n  gl_Position = vec4(final.xy, 0, 1);\n}\n";
+},{}],"src/shaders/fragment.glsl":[function(require,module,exports) {
+module.exports = "precision mediump float;\n#define GLSLIFY 1\nuniform float u_buffer;\nuniform float u_gamma;\nuniform sampler2D u_texture;\nuniform float u_zoom;\n\nvarying vec2 v_texcoord;\n\nvoid main () {\n  float minSmoothing = 0.5;\n  float maxSmoothing = 1.5;\n\n  float smoothing = minSmoothing + (maxSmoothing - minSmoothing) * u_zoom;\n\n  float dist = texture2D(u_texture, v_texcoord).r;\n  gl_FragColor = vec4(dist, dist, dist, 1);\n\n  float gamma = smoothing * u_gamma;\n\n  float alpha = smoothstep(u_buffer - gamma, u_buffer + gamma, dist);\n  gl_FragColor = vec4(1.0, 0.5, 0.0, alpha);\n}\n";
 },{}],"src/index.js":[function(require,module,exports) {
 "use strict";
 
@@ -24869,6 +24873,10 @@ var _d3Zoom = require("d3-zoom");
 var _regl = _interopRequireDefault(require("regl"));
 
 var _tinySdf = _interopRequireDefault(require("@mapbox/tiny-sdf"));
+
+var _vertex = _interopRequireDefault(require("./shaders/vertex.glsl"));
+
+var _fragment = _interopRequireDefault(require("./shaders/fragment.glsl"));
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -25020,8 +25028,8 @@ document.fonts.ready.then(function () {
       texturePositions = _createMesh.texturePositions;
 
   var draw = regl({
-    frag: "\nprecision mediump float;\nuniform float u_buffer;\nuniform float u_gamma;\nuniform sampler2D u_texture;\n\nvarying vec2 v_texcoord;\n\nvoid main () {\n  float dist = texture2D(u_texture, v_texcoord).r;\n  gl_FragColor = vec4(dist, dist, dist, 1);\n\n  float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);\n  gl_FragColor = vec4(1.0, 0.5, 0.0, alpha);\n}\n",
-    vert: "\nprecision mediump float;\n\nattribute vec2 position;\nattribute vec2 texturePosition;\n\nuniform mat3 transform;\nuniform mat3 projection;\n\nuniform vec2 u_textureSize;\n\nvarying vec2 v_texcoord;\n\nvoid main () {\n  v_texcoord = texturePosition / u_textureSize;\n  vec3 final = projection * transform * vec3(position, 1);\n  gl_Position = vec4(final.xy, 0, 1);\n}\n  ",
+    frag: _fragment.default,
+    vert: _vertex.default,
     attributes: {
       position: regl.prop("points"),
       texturePosition: regl.prop('texturePositions')
@@ -25032,7 +25040,8 @@ document.fonts.ready.then(function () {
       u_texture: regl.texture(atlasCanvas),
       u_gamma: regl.prop('gamma'),
       u_buffer: regl.prop('buffer'),
-      u_textureSize: regl.prop('textureSize')
+      u_textureSize: regl.prop('textureSize'),
+      u_zoom: regl.prop('zoom')
     },
     count: function count(context, props) {
       return props.points.length;
@@ -25043,12 +25052,14 @@ document.fonts.ready.then(function () {
   var sdfBuffer = 192 / 256;
 
   var render = function render() {
+    console.log(transform, _fragment.default, _vertex.default);
     draw({
       points: vertices,
       transform: transform,
       projection: projection,
       texturePositions: texturePositions,
       gamma: sdfGamma / fontSize / dpx,
+      zoom: transform[0],
       buffer: sdfBuffer,
       textureSize: [atlasCanvas.width, atlasCanvas.height]
     });
@@ -25056,7 +25067,7 @@ document.fonts.ready.then(function () {
 
   render();
 });
-},{"./styles.css":"src/styles.css","gl-matrix":"node_modules/gl-matrix/esm/index.js","d3-selection":"node_modules/d3-selection/src/index.js","d3-zoom":"node_modules/d3-zoom/src/index.js","regl":"node_modules/regl/dist/regl.js","@mapbox/tiny-sdf":"node_modules/@mapbox/tiny-sdf/index.js"}],"node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
+},{"./styles.css":"src/styles.css","gl-matrix":"node_modules/gl-matrix/esm/index.js","d3-selection":"node_modules/d3-selection/src/index.js","d3-zoom":"node_modules/d3-zoom/src/index.js","regl":"node_modules/regl/dist/regl.js","@mapbox/tiny-sdf":"node_modules/@mapbox/tiny-sdf/index.js","./shaders/vertex.glsl":"src/shaders/vertex.glsl","./shaders/fragment.glsl":"src/shaders/fragment.glsl"}],"node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
 var global = arguments[3];
 var OVERLAY_ID = '__parcel__error__overlay__';
 var OldModule = module.bundle.Module;
@@ -25084,7 +25095,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "62518" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "50768" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};

@@ -5,6 +5,9 @@ import { zoom as d3Zoom } from "d3-zoom";
 import createRegl from "regl";
 import TinySdf from '@mapbox/tiny-sdf';
 
+import vert from './shaders/vertex.glsl';
+import frag from './shaders/fragment.glsl';
+
 const text = 'Auteuil Dugommier Villiers';
 
 const width = document.documentElement.clientWidth;
@@ -164,42 +167,7 @@ document.fonts.ready.then(() => {
   const { vertices, texturePositions } = createMesh(text);
 
   const draw = regl({
-    frag: `
-precision mediump float;
-uniform float u_buffer;
-uniform float u_gamma;
-uniform sampler2D u_texture;
-
-varying vec2 v_texcoord;
-
-void main () {
-  float dist = texture2D(u_texture, v_texcoord).r;
-  gl_FragColor = vec4(dist, dist, dist, 1);
-
-  float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);
-  gl_FragColor = vec4(1.0, 0.5, 0.0, alpha);
-}
-`,
-
-    vert: `
-precision mediump float;
-
-attribute vec2 position;
-attribute vec2 texturePosition;
-
-uniform mat3 transform;
-uniform mat3 projection;
-
-uniform vec2 u_textureSize;
-
-varying vec2 v_texcoord;
-
-void main () {
-  v_texcoord = texturePosition / u_textureSize;
-  vec3 final = projection * transform * vec3(position, 1);
-  gl_Position = vec4(final.xy, 0, 1);
-}
-  `,
+    frag, vert,
 
     attributes: {
       position: regl.prop("points"),
@@ -212,7 +180,8 @@ void main () {
       u_texture: regl.texture(atlasCanvas),
       u_gamma: regl.prop('gamma'),
       u_buffer: regl.prop('buffer'),
-      u_textureSize: regl.prop('textureSize')
+      u_textureSize: regl.prop('textureSize'),
+      u_zoom: regl.prop('zoom')
     },
 
     count: (context, props) => props.points.length
@@ -222,12 +191,14 @@ void main () {
   const sdfGamma = 1.4142;
   const sdfBuffer = 192 / 256;
   const render = () => {
+    console.log(transform, frag, vert);
     draw({
       points: vertices,
       transform,
       projection,
       texturePositions,
       gamma: sdfGamma / fontSize / dpx,
+      zoom: transform[0],
       buffer: sdfBuffer,
       textureSize: [atlasCanvas.width, atlasCanvas.height]
     });
