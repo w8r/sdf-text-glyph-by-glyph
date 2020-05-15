@@ -1,6 +1,7 @@
 import "./styles.css";
 import { mat3 } from "gl-matrix";
-import { select as d3Select, zoom as d3Zoom, event as d3Event } from "d3";
+import { select as d3Select, event as d3Event } from 'd3-selection';
+import { zoom as d3Zoom } from "d3-zoom";
 import createRegl from "regl";
 import TinySdf from '@mapbox/tiny-sdf';
 
