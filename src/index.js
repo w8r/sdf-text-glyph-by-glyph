@@ -150,13 +150,13 @@ document.fonts.ready.then(() => {
   const realTextCanvas = document.body.appendChild(document.createElement('canvas'));
   realTextCanvas.width = 400;
   realTextCanvas.height = 100;
-  realTextCanvas.style.width = 400 / 2 + 'px';
-  realTextCanvas.style.height = 100 / 2 + 'px';
+  realTextCanvas.style.width = 400 / dpx + 'px';
+  realTextCanvas.style.height = 100 / dpx + 'px';
 
   realTextCanvas.id = 'reference';
   const rctx = realTextCanvas.getContext('2d');
   rctx.font = `${fontSize}px ${fontFamily}`;
-  rctx.fillText(text, 0, fontSize * 2);
+  rctx.fillText(text, 0, fontSize * dpx);
   rctx.textBaseline = 'bottom';
 
 
@@ -165,7 +165,6 @@ document.fonts.ready.then(() => {
   const draw = regl({
     frag: `
 precision mediump float;
-vec4 nodeColor = vec4(0.6, 0.3, 0.0, 1.0);
 uniform float u_buffer;
 uniform float u_gamma;
 uniform sampler2D u_texture;
@@ -173,19 +172,11 @@ uniform sampler2D u_texture;
 varying vec2 v_texcoord;
 
 void main () {
-  // float r = 0.0, delta = 0.0, alpha = 1.0;
-  // vec2 cxy = 2.0 * gl_PointCoord - 1.0;
-  // r = dot(cxy, cxy);
-  // if (r > 1.0) {
-  //     discard;
-  // }
   float dist = texture2D(u_texture, v_texcoord).r;
   gl_FragColor = vec4(dist, dist, dist, 1);
 
   float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);
   gl_FragColor = vec4(1.0, 0.5, 0.0, alpha);
-
-  //gl_FragColor = nodeColor; // * alpha;
 }
 `,
 
