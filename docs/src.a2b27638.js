@@ -24858,7 +24858,7 @@ function edt1d(f, d, v, z, n) {
 },{}],"src/shaders/vertex.glsl":[function(require,module,exports) {
 module.exports = "precision mediump float;\n#define GLSLIFY 1\n\nattribute vec2 position;\nattribute vec2 texturePosition;\n\nuniform mat3 transform;\nuniform mat3 projection;\n\nuniform vec2 u_textureSize;\n\nvarying vec2 v_texcoord;\n\nvoid main () {\n  v_texcoord = texturePosition / u_textureSize;\n  vec3 final = projection * transform * vec3(position, 1);\n  gl_Position = vec4(final.xy, 0, 1);\n}\n";
 },{}],"src/shaders/fragment.glsl":[function(require,module,exports) {
-module.exports = "precision mediump float;\n#define GLSLIFY 1\nuniform float u_buffer;\nuniform float u_gamma;\nuniform sampler2D u_texture;\nuniform float u_zoom;\n\nvarying vec2 v_texcoord;\n\nvoid main () {\n  float minSmoothing = 0.5;\n  float maxSmoothing = 1.5;\n\n  float smoothing = minSmoothing + (maxSmoothing - minSmoothing) * u_zoom;\n\n  float dist = texture2D(u_texture, v_texcoord).r;\n  gl_FragColor = vec4(dist, dist, dist, 1);\n\n  float gamma = smoothing * u_gamma;\n\n  float alpha = smoothstep(u_buffer - gamma, u_buffer + gamma, dist);\n  gl_FragColor = vec4(1.0, 0.5, 0.0, alpha);\n}\n";
+module.exports = "precision mediump float;\n#define GLSLIFY 1\nuniform float u_buffer;\nuniform float u_gamma;\nuniform sampler2D u_texture;\nuniform float u_zoom;\n\nvarying vec2 v_texcoord;\n\nvoid main () {\n  float dist = texture2D(u_texture, v_texcoord).r;\n  gl_FragColor = vec4(dist, dist, dist, 1);\n\n  float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);\n  gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);\n}\n";
 },{}],"src/index.js":[function(require,module,exports) {
 "use strict";
 
@@ -24884,6 +24884,13 @@ var text = 'Auteuil Dugommier Villiers';
 var width = document.documentElement.clientWidth;
 var height = document.documentElement.clientHeight;
 var dpx = devicePixelRatio;
+var minZoom = 0.01;
+var maxZoom = 10;
+var sdfRadius = 4;
+var sdfGamma = 1.4142;
+var sdfBuffer = 192 / 256;
+var fontSize = 12;
+var samplingFontSize = 24;
 document.fonts.ready.then(function () {
   var canvas = document.body.appendChild(document.createElement("canvas"));
   canvas.id = "canvas";
@@ -24893,7 +24900,6 @@ document.fonts.ready.then(function () {
   canvas.style.height = height + "px";
   var atlasCanvas = document.body.appendChild(document.createElement("canvas"));
   atlasCanvas.id = "atlas";
-  var fontSize = 32;
   var fontFamily = "'Roboto', sans-serif";
   var fontWeight = 'normal';
 
@@ -24914,16 +24920,16 @@ document.fonts.ready.then(function () {
   function fillAtlas(text) {
     var atlas = {};
     var ctx = atlasCanvas.getContext('2d');
-    ctx.font = "".concat(fontSize, "px ").concat(fontFamily);
+    ctx.font = "".concat(samplingFontSize, "px ").concat(fontFamily);
     var x = 0;
     var y = 0;
     var buffer = 6;
     var side = Math.ceil(Math.sqrt(text.length));
-    var textureWidth = side * (fontSize + buffer * 2);
+    var textureWidth = side * (samplingFontSize + buffer * 2);
     var textureHeight = textureWidth;
     atlasCanvas.width = textureWidth;
     atlasCanvas.height = textureHeight;
-    var sdf = new _tinySdf.default(fontSize, buffer, undefined, undefined, fontFamily, fontWeight);
+    var sdf = new _tinySdf.default(samplingFontSize, buffer, sdfRadius, 0.25, fontFamily, fontWeight);
     var size = sdf.size;
     ctx.clearRect(0, 0, textureWidth, textureHeight);
     text.split('').forEach(function (char, i) {
@@ -24958,7 +24964,7 @@ document.fonts.ready.then(function () {
 
   var transform = _glMatrix.mat3.create();
 
-  _glMatrix.mat3.translate(transform, transform, [width / 2, height / 2]);
+  _glMatrix.mat3.translate(transform, transform, [300, 50]);
 
   var projection = _glMatrix.mat3.projection(_glMatrix.mat3.create(), width, height);
 
@@ -24975,7 +24981,7 @@ document.fonts.ready.then(function () {
   } // set up zoom/pan
 
 
-  (0, _d3Selection.select)(canvas).call((0, _d3Zoom.zoom)().scaleExtent([0.01, 20]).on("zoom", function () {
+  (0, _d3Selection.select)(canvas).call((0, _d3Zoom.zoom)().scaleExtent([minZoom, maxZoom]).on("zoom", function () {
     var t = _d3Selection.event.transform;
     updateTransform(t.x, t.y, t.k);
     render();
@@ -24989,22 +24995,23 @@ document.fonts.ready.then(function () {
     ctx.font = "".concat(fontSize, "px ").concat(fontFamily);
     var x = 0;
     var y = 0;
+    var ratio = samplingFontSize / fontSize;
     text.split('').forEach(function (char) {
       var _ctx$measureText2 = ctx.measureText(char),
           width = _ctx$measureText2.width;
 
       var info = atlas[char];
       var buffer = info.buffer;
-      var h = (fontSize + buffer) / dpx;
-      var w = width / dpx;
+      var h = fontSize;
+      var w = width;
       vertices.push([x, y], [x, y + h], [x + w, y], [x + w, y], [x + w, y + h], [x, y + h]);
       var tx = info.x + buffer;
-      var ty = info.y + buffer / 2;
-      var tw = width;
-      var th = fontSize + buffer; //info.height - buffer;
+      var ty = info.y + buffer;
+      var tw = width * ratio;
+      var th = fontSize * ratio; //info.height - buffer;
 
       texturePositions.push([tx, ty], [tx, ty + th], [tx + tw, ty], [tx + tw, ty], [tx + tw, ty + th], [tx, ty + th]);
-      x += width / dpx;
+      x += width;
     });
     return {
       vertices: vertices,
@@ -25019,7 +25026,7 @@ document.fonts.ready.then(function () {
   realTextCanvas.style.height = 100 / dpx + 'px';
   realTextCanvas.id = 'reference';
   var rctx = realTextCanvas.getContext('2d');
-  rctx.font = "".concat(fontSize, "px ").concat(fontFamily);
+  rctx.font = "".concat(fontSize * dpx, "px ").concat(fontFamily);
   rctx.fillText(text, 0, fontSize * dpx);
   rctx.textBaseline = 'bottom';
 
@@ -25048,18 +25055,23 @@ document.fonts.ready.then(function () {
     } //primitive: 'points'
 
   });
-  var sdfGamma = 1.4142;
-  var sdfBuffer = 192 / 256;
+  var minSmoothing = 4;
+  var maxSmoothing = 4;
 
   var render = function render() {
-    console.log(transform, _fragment.default, _vertex.default);
+    var zoom = transform[0];
+    var zoomNorm = zoom / (maxZoom - minZoom);
+    var smoothing = minSmoothing + zoomNorm * (maxSmoothing - minSmoothing);
+    var fontSamplingRatio = samplingFontSize / fontSize;
+    var gamma = smoothing * sdfGamma / samplingFontSize / dpx;
+    console.log(smoothing, gamma, transform);
     draw({
       points: vertices,
       transform: transform,
       projection: projection,
       texturePositions: texturePositions,
-      gamma: sdfGamma / fontSize / dpx,
-      zoom: transform[0],
+      gamma: gamma,
+      zoom: zoom,
       buffer: sdfBuffer,
       textureSize: [atlasCanvas.width, atlasCanvas.height]
     });

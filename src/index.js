@@ -14,6 +14,16 @@ const width = document.documentElement.clientWidth;
 const height = document.documentElement.clientHeight;
 const dpx = devicePixelRatio;
 
+const minZoom = 0.01;
+const maxZoom = 10;
+
+const sdfRadius = 4;
+const sdfGamma = 1.4142;
+const sdfBuffer = 192 / 256;
+
+const fontSize = 12;
+const samplingFontSize = 24;
+
 document.fonts.ready.then(() => {
 
   const canvas = document.body.appendChild(document.createElement("canvas"));
@@ -25,7 +35,7 @@ document.fonts.ready.then(() => {
 
   const atlasCanvas = document.body.appendChild(document.createElement("canvas"));
   atlasCanvas.id = "atlas";
-  const fontSize = 32;
+
   const fontFamily = "'Roboto', sans-serif";
   const fontWeight = 'normal';
 
@@ -46,18 +56,25 @@ document.fonts.ready.then(() => {
   function fillAtlas(text) {
     const atlas = {};
     const ctx = atlasCanvas.getContext('2d');
-    ctx.font = `${fontSize}px ${fontFamily}`;
+    ctx.font = `${samplingFontSize}px ${fontFamily}`;
     let x = 0;
     let y = 0;
     const buffer = 6;
     const side = Math.ceil(Math.sqrt(text.length));
-    const textureWidth = side * (fontSize + buffer * 2);
+    const textureWidth = side * (samplingFontSize + buffer * 2);
     const textureHeight = textureWidth;
 
     atlasCanvas.width = textureWidth;
     atlasCanvas.height = textureHeight;
 
-    const sdf = new TinySdf(fontSize, buffer, undefined, undefined, fontFamily, fontWeight);
+    const sdf = new TinySdf(
+      samplingFontSize,
+      buffer,
+      sdfRadius,
+      0.25,
+      fontFamily,
+      fontWeight
+    );
     const size = sdf.size;
     ctx.clearRect(0, 0, textureWidth, textureHeight);
 
@@ -86,13 +103,14 @@ document.fonts.ready.then(() => {
 
       x = (x + sdf.size) % (sdf.size * side);
     });
+
     return atlas;
   }
 
   const atlas = fillAtlas(text);
 
   const transform = mat3.create();
-  mat3.translate(transform, transform, [width / 2, height / 2]);
+  mat3.translate(transform, transform, [300, 50]);
   const projection = mat3.projection(mat3.create(), width, height);
 
   function updateTransform(x, y, scale) {
@@ -106,7 +124,7 @@ document.fonts.ready.then(() => {
   // set up zoom/pan
   d3Select(canvas).call(
     d3Zoom()
-      .scaleExtent([0.01, 20])
+      .scaleExtent([minZoom, maxZoom])
       .on("zoom", () => {
         const t = d3Event.transform;
         updateTransform(t.x, t.y, t.k);
@@ -124,28 +142,30 @@ document.fonts.ready.then(() => {
 
     let x = 0;
     let y = 0;
+
+    const ratio = samplingFontSize / fontSize;
     text.split('').forEach(char => {
       const { width } = ctx.measureText(char);
       const info = atlas[char];
       const buffer = info.buffer;
 
-      const h = (fontSize + buffer) / dpx;
-      const w = width / dpx;
+      const h = fontSize;
+      const w = width;
       vertices.push(
         [x, y], [x, y + h], [x + w, y],
         [x + w, y], [x + w, y + h], [x, y + h]
       );
 
       const tx = info.x + buffer;
-      const ty = info.y + buffer / 2;
-      const tw = width;
-      const th = fontSize + buffer; //info.height - buffer;
+      const ty = info.y + buffer;
+      const tw = (width * ratio);
+      const th = (fontSize * ratio); //info.height - buffer;
 
       texturePositions.push(
         [tx, ty], [tx, ty + th], [tx + tw, ty],
         [tx + tw, ty], [tx + tw, ty + th], [tx, ty + th]
       );
-      x += width / dpx;
+      x += width;
     });
 
     return { vertices, texturePositions };
@@ -159,7 +179,7 @@ document.fonts.ready.then(() => {
 
   realTextCanvas.id = 'reference';
   const rctx = realTextCanvas.getContext('2d');
-  rctx.font = `${fontSize}px ${fontFamily}`;
+  rctx.font = `${fontSize * dpx}px ${fontFamily}`;
   rctx.fillText(text, 0, fontSize * dpx);
   rctx.textBaseline = 'bottom';
 
@@ -188,17 +208,27 @@ document.fonts.ready.then(() => {
     //primitive: 'points'
   });
 
-  const sdfGamma = 1.4142;
-  const sdfBuffer = 192 / 256;
+
+
+  const minSmoothing = 4;
+  const maxSmoothing = 4;
+
   const render = () => {
-    console.log(transform, frag, vert);
+    const zoom = transform[0];
+    const zoomNorm = (zoom / (maxZoom - minZoom));
+    const smoothing = (minSmoothing + zoomNorm * (maxSmoothing - minSmoothing));
+
+    const fontSamplingRatio = samplingFontSize / fontSize;
+    const gamma = smoothing * sdfGamma / samplingFontSize / dpx;
+
+    console.log(smoothing, gamma, transform);
     draw({
       points: vertices,
       transform,
       projection,
       texturePositions,
-      gamma: sdfGamma / fontSize / dpx,
-      zoom: transform[0],
+      gamma,
+      zoom,
       buffer: sdfBuffer,
       textureSize: [atlasCanvas.width, atlasCanvas.height]
     });
